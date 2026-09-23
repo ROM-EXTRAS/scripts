@@ -276,7 +276,7 @@ def main():
         "-F",
         "--fork-org",
         metavar="",
-        help="Provide a profile or organization name forking our repository to apply patches to"
+        help="Provide a profile or organization name forking our repository to apply patches to",
     )
     parser.add_argument(
         "-p", "--pull", action="store_true", help="execute pull instead of cherry-pick"
@@ -389,7 +389,7 @@ def main():
 
     for project in projects:
         name = project.get("review_name")
-        # Fallback to Poject Name if review_name element doesn't exist
+        # Fallback to Project Name if review_name element doesn't exist
         if name is None:
             name = project.get("name")
         # when name and path are equal, "repo manifest" doesn't return a path at all, so fall back to name
@@ -515,22 +515,41 @@ def main():
                     project_path, local_branch, review["branch"]
                 )
             )
-        elif args.fork_org:
+        elif (
+            args.fork_org
+            and review["project"].replace("LineageOS", args.fork_org)
+            in project_name_to_data
+        ):
             forked_item = review["project"].replace("LineageOS", args.fork_org)
-            print(f"Forked:\n{forked_item}")
-            # print(f"Orig:\n{review["project"]}")
-            if review["project"].replace("LineageOS", args.fork_org) in project_name_to_data:
-                if args.force or review["branch"] in project_name_to_data[forked_item]:
-                    if args.force:
-                        for key, value in project_name_to_data[forked_item].items():
-                            project_path = project_name_to_data[forked_item][key]
-                        print(
-                            "WARNING: Force Applying patch on path {0}".format(
-                                project_path
-                            )
-                        )
-                    else:
-                        project_path = project_name_to_data[forked_item][review["branch"]]
+            if not args.quiet:
+                print(f"Forked:\n{forked_item}")
+            if review["branch"] in project_name_to_data[forked_item]:
+                project_path = project_name_to_data[forked_item][review["branch"]]
+            elif args.force:
+                project_path = next(iter(project_name_to_data[forked_item].values()))
+                print("WARNING: Force Applying patch on path {0}".format(project_path))
+            elif len(project_name_to_data[forked_item]) == 1:
+                local_branch = list(project_name_to_data[forked_item])[0]
+                project_path = project_name_to_data[forked_item][local_branch]
+                print(
+                    'WARNING: Project {0} has a different branch ("{1}" != "{2}")'.format(
+                        project_path, local_branch, review["branch"]
+                    )
+                )
+            elif args.ignore_missing:
+                print(
+                    "WARNING: Skipping {0} since there is no project directory for: {1}\n".format(
+                        review["number"], review["project"]
+                    )
+                )
+                continue
+            else:
+                sys.stderr.write(
+                    "ERROR: For {0}, could not determine the project path for project {1}\n".format(
+                        review["number"], review["project"]
+                    )
+                )
+                sys.exit(1)
         elif args.ignore_missing:
             print(
                 "WARNING: Skipping {0} since there is no project directory for: {1}\n".format(
